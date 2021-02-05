@@ -19,7 +19,6 @@ if sys.stdout.encoding is None:
 
 
 def main(arguments):
-
     if arguments.command == 'generate':
 
         obfuscated = generate.generate(
@@ -41,7 +40,8 @@ def main(arguments):
     elif arguments.command == 'terminal':
         session = SessionURL(
             url = arguments.url,
-            password = arguments.password
+            password = arguments.password,
+            custom = arguments.custom
         )
 
     elif arguments.command == 'session':
@@ -66,6 +66,7 @@ if __name__ == '__main__':
     terminalparser = subparsers.add_parser('terminal', help='Run terminal or command on the target')
     terminalparser.add_argument('url', help = 'The agent URL')
     terminalparser.add_argument('password', help = 'The agent password')
+    terminalparser.add_argument('custom', help = 'whether current test backdoor program is customrized as an one word trojan')
     terminalparser.add_argument('cmd', help = 'Command', nargs='?')
 
     sessionparser = subparsers.add_parser('session', help='Recover an existing session')

